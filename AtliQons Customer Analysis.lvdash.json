@@ -1,0 +1,813 @@
+{
+  "datasets": [
+    {
+      "name": "6f4f2c06",
+      "displayName": "vw_fact_orders_enriched",
+      "config": {
+        "version": "1.1",
+        "source": "fmcg.gold.vw_fact_orders_enriched",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "comment": "Represents the total number of rows in the dataset. Use this measure to count all",
+            "displayName": "Count"
+          }
+        ]
+      }
+    },
+    {
+      "name": "top10_customers_revenue",
+      "displayName": "Top 10 Customers by Revenue",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT customer, SUM(total_amount_inr) AS revenue FROM fmcg.gold.vw_fact_orders_enriched GROUP BY customer ORDER BY revenue DESC LIMIT 10",
+        "dimensions": [
+          {
+            "name": "customer",
+            "expr": "source.customer"
+          }
+        ],
+        "measures": [
+          {
+            "name": "revenue",
+            "expr": "SUM(source.revenue)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "cumulative_revenue_share",
+      "displayName": "Cumulative Revenue Share by Customer",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT customer, SUM(total_amount_inr) AS revenue, SUM(total_amount_inr) * 100.0 / SUM(SUM(total_amount_inr)) OVER () AS revenue_share, SUM(SUM(total_amount_inr)) OVER (ORDER BY SUM(total_amount_inr) DESC) * 100.0 / SUM(SUM(total_amount_inr)) OVER () AS cumulative_share, ROW_NUMBER() OVER (ORDER BY SUM(total_amount_inr) DESC) AS rank FROM fmcg.gold.vw_fact_orders_enriched GROUP BY customer ORDER BY revenue DESC",
+        "dimensions": [
+          {
+            "name": "customer",
+            "expr": "source.customer"
+          },
+          {
+            "name": "rank",
+            "expr": "source.rank"
+          }
+        ],
+        "measures": [
+          {
+            "name": "revenue",
+            "expr": "SUM(source.revenue)"
+          },
+          {
+            "name": "revenue_share",
+            "expr": "SUM(source.revenue_share)"
+          },
+          {
+            "name": "cumulative_share",
+            "expr": "SUM(source.cumulative_share)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "customers_for_80pct",
+      "displayName": "Customers for 80% Revenue",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT MIN(rank) AS customers_needed FROM ( SELECT customer, SUM(total_amount_inr) AS revenue, SUM(SUM(total_amount_inr)) OVER (ORDER BY SUM(total_amount_inr) DESC) * 100.0 / SUM(SUM(total_amount_inr)) OVER () AS cumulative_share, ROW_NUMBER() OVER (ORDER BY SUM(total_amount_inr) DESC) AS rank FROM fmcg.gold.vw_fact_orders_enriched GROUP BY customer ) t WHERE cumulative_share >= 80",
+        "measures": [
+          {
+            "name": "customers_needed",
+            "expr": "SUM(source.customers_needed)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "new_customers_per_year",
+      "displayName": "New Customers per Year",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT first_purchase_year, COUNT(*) AS new_customers FROM ( SELECT customer, MIN(`year`) AS first_purchase_year FROM fmcg.gold.vw_fact_orders_enriched GROUP BY customer ) t GROUP BY first_purchase_year ORDER BY first_purchase_year",
+        "dimensions": [
+          {
+            "name": "first_purchase_year",
+            "expr": "source.first_purchase_year"
+          }
+        ],
+        "measures": [
+          {
+            "name": "new_customers",
+            "expr": "SUM(source.new_customers)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "retention_rate",
+      "displayName": "Customer Retention Rate",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT (COUNT(DISTINCT CASE WHEN EXISTS ( SELECT 1 FROM fmcg.gold.vw_fact_orders_enriched b WHERE b.customer = f.customer AND b.year = (SELECT MAX(year) FROM fmcg.gold.vw_fact_orders_enriched) ) THEN f.customer END) * 100.0 / COUNT(DISTINCT f.customer)) AS retention_rate, COUNT(DISTINCT f.customer) AS prev_year_customers, COUNT(DISTINCT CASE WHEN EXISTS ( SELECT 1 FROM fmcg.gold.vw_fact_orders_enriched b WHERE b.customer = f.customer AND b.year = (SELECT MAX(year) FROM fmcg.gold.vw_fact_orders_enriched) ) THEN f.customer END) AS retained_customers FROM fmcg.gold.vw_fact_orders_enriched f WHERE f.year = (SELECT MAX(year) FROM fmcg.gold.vw_fact_orders_enriched WHERE year < (SELECT MAX(year) FROM fmcg.gold.vw_fact_orders_enriched)) AND f.customer IS NOT NULL",
+        "measures": [
+          {
+            "name": "retention_rate",
+            "expr": "SUM(source.retention_rate)"
+          },
+          {
+            "name": "prev_year_customers",
+            "expr": "SUM(source.prev_year_customers)"
+          },
+          {
+            "name": "retained_customers",
+            "expr": "SUM(source.retained_customers)"
+          }
+        ]
+      }
+    },
+    {
+      "name": "customer_count_by_year",
+      "displayName": "Customer Count by Year",
+      "config": {
+        "version": "1.1",
+        "source": "SELECT CAST(DATE_TRUNC('year', `date`) AS DATE) AS year_date, COUNT(DISTINCT customer) AS customer_count FROM fmcg.gold.vw_fact_orders_enriched WHERE customer IS NOT NULL GROUP BY CAST(DATE_TRUNC('year', `date`) AS DATE) ORDER BY year_date",
+        "dimensions": [
+          {
+            "name": "year_date",
+            "expr": "source.year_date"
+          }
+        ],
+        "measures": [
+          {
+            "name": "customer_count",
+            "expr": "SUM(source.customer_count)"
+          }
+        ]
+      }
+    }
+  ],
+  "pages": [
+    {
+      "name": "a5ae542d",
+      "displayName": "Customer Analysis",
+      "layout": [
+        {
+          "widget": {
+            "name": "top10_customers_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "top10_customers_revenue",
+                  "fields": [
+                    {
+                      "name": "customer",
+                      "expression": "`customer`"
+                    },
+                    {
+                      "name": "measure(revenue)",
+                      "expression": "MEASURE(`revenue`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Top 10 Customers by Revenue</span>",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "customer",
+                  "displayName": "customer",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(revenue)",
+                  "displayName": "revenue",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "customer",
+                  "displayName": "customer",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#048AF9"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "pareto_chart",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "cumulative_revenue_share",
+                  "fields": [
+                    {
+                      "name": "customer",
+                      "expression": "`customer`"
+                    },
+                    {
+                      "name": "measure(revenue_share)",
+                      "expression": "MEASURE(`revenue_share`)"
+                    },
+                    {
+                      "name": "measure(cumulative_share)",
+                      "expression": "MEASURE(`cumulative_share`)"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`rank` <= 10"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Pareto Chart: Revenue Share &amp; Cumulative Share (Top 10)</span>",
+                  "fields": []
+                }
+              },
+              "version": 1,
+              "widgetType": "combo",
+              "encodings": {
+                "x": {
+                  "fieldName": "customer",
+                  "displayName": "Customer",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "primary": {
+                    "fields": [
+                      {
+                        "fieldName": "measure(revenue_share)",
+                        "displayName": "Revenue Share (%)"
+                      }
+                    ],
+                    "formatTemplate": "{{ @formatted }}%",
+                    "scale": {
+                      "type": "quantitative"
+                    }
+                  },
+                  "secondary": {
+                    "fields": [
+                      {
+                        "fieldName": "measure(cumulative_share)",
+                        "displayName": "Cumulative Share (%)"
+                      }
+                    ],
+                    "formatTemplate": "{{ @formatted }}%",
+                    "scale": {
+                      "type": "quantitative"
+                    }
+                  }
+                },
+                "label": {
+                  "show": false
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#038DFF"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 8
+          }
+        },
+        {
+          "widget": {
+            "name": "top_customer_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "cumulative_revenue_share",
+                  "fields": [
+                    {
+                      "name": "measure(revenue)",
+                      "expression": "MEASURE(`revenue`)"
+                    },
+                    {
+                      "name": "`customer`",
+                      "expression": "`customer`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`rank` = 1"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Top Customer (Name + Revenue)</span>",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(revenue)",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "INR",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 2
+                    }
+                  },
+                  "formatTemplate": "{{ `customer` }}\n{{ @formatted }}",
+                  "displayName": "Revenue"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#0089FB"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 1,
+            "width": 5,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "top_customer_share_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "cumulative_revenue_share",
+                  "fields": [
+                    {
+                      "name": "measure(revenue_share)",
+                      "expression": "MEASURE(`revenue_share`)"
+                    },
+                    {
+                      "name": "`customer`",
+                      "expression": "`customer`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`rank` = 1"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Top Customer Revenue Share</span>",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(revenue_share)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 2
+                    }
+                  },
+                  "formatTemplate": "{{ `customer` }}\n{{ @formatted }}%",
+                  "displayName": "Revenue Share"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#008BFF"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 4,
+            "width": 4,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "customers_80pct_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "customers_for_80pct",
+                  "fields": [
+                    {
+                      "name": "measure(customers_needed)",
+                      "expression": "MEASURE(`customers_needed`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Customers Needed for 80% Revenue</span>",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(customers_needed)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none"
+                  },
+                  "formatTemplate": "{{ @formatted }} customers",
+                  "displayName": "Customers"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#008BFE"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "new_customers_bar",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "new_customers_per_year",
+                  "fields": [
+                    {
+                      "name": "first_purchase_year",
+                      "expression": "`first_purchase_year`"
+                    },
+                    {
+                      "name": "measure(new_customers)",
+                      "expression": "MEASURE(`new_customers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">New Customers per Year</span>",
+                  "fields": []
+                }
+              },
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "first_purchase_year",
+                  "displayName": "first_purchase_year",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(new_customers)",
+                  "displayName": "new_customers",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "first_purchase_year",
+                  "displayName": "first_purchase_year",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#028BFE"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 22,
+            "width": 12,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "total_customers_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "new_customers_per_year",
+                  "fields": [
+                    {
+                      "name": "measure(new_customers)",
+                      "expression": "MEASURE(`new_customers`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Total Customers</span>",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(new_customers)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none"
+                  },
+                  "formatTemplate": "{{ @formatted }} customers",
+                  "displayName": "Total Customers"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#1090FB"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "retention_rate_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "retention_rate",
+                  "fields": [
+                    {
+                      "name": "measure(retention_rate)",
+                      "expression": "MEASURE(`retention_rate`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Customer Retention Rate</span>",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(retention_rate)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none"
+                  },
+                  "formatTemplate": "{{ @formatted }}%",
+                  "displayName": "Retention Rate"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#0786F0"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "customer_count_yoy_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "customer_count_by_year",
+                  "fields": [
+                    {
+                      "name": "year_date",
+                      "expression": "`year_date`"
+                    },
+                    {
+                      "name": "measure(customer_count)",
+                      "expression": "MEASURE(`customer_count`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "DESC",
+                      "expression": "`year_date`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "frame": {
+                "showTitle": true,
+                "showDescription": false,
+                "title": {
+                  "value": "<span style=\"font-size: 14px;\">Customer Count by Year (YoY)</span>",
+                  "fields": []
+                }
+              },
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(customer_count)",
+                  "format": {
+                    "type": "number-plain",
+                    "abbreviation": "none"
+                  },
+                  "displayName": "Customers"
+                },
+                "period": {
+                  "fieldName": "year_date",
+                  "displayName": "Year"
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            },
+            "specExtensions": {
+              "widgetBorderColor": {
+                "dark": "#0F83E3"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 1,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "739c751c",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size: 30px;\">Customer Analysis</span></span>"
+              ]
+            },
+            "specExtensions": {
+              "widgetBackgroundColor": {
+                "dark": "#2D86D7"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 1
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}
